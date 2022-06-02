@@ -1,0 +1,153 @@
+public class LeadConverter {
+
+    @future
+    public static void ConvertLeads (Id CampaignId) {
+    
+        //set up a list of lead convert objects
+        List<Database.LeadConvert> leadConverts = new List<Database.LeadConvert>();
+        
+        //get lead converted status
+        LeadStatus convertedStatus = [
+            select MasterLabel
+            from LeadStatus
+            where IsConverted = true
+            limit 1
+        ];
+        
+        //get id of api user to assign inactive lead owners
+        Id apiUserId;
+        List <User> apiUsers = [
+            SELECT Id 
+            FROM User 
+            WHERE Username LIKE 'salesforce@fhiclinical.com%' 
+            LIMIT 1
+        ];
+        
+        if ( apiUsers.size() > 0 ) {
+            apiUserId = apiUsers[0].Id;
+        }
+        
+        //get list of leads to be converted
+        list <lead> leadsToConvert = [SELECT 
+                                     Id,
+                                     Company,
+                                     Account__c,
+                                     FirstName,
+                                     LastName,
+                                     Name,
+                                     Email,
+                                     OwnerId
+                                     FROM Lead 
+                                     WHERE Id IN 
+                                    (SELECT
+                                     LeadId
+                                     FROM CampaignMember
+                                     WHERE CampaignId = :campaignId
+                                     AND LeadId != null) 
+                                     ];
+        
+        //create a map of lead owners
+        set <Id> leadOwnerIds = new set <Id>();
+        for (lead l :leadsToConvert) {
+            leadOwnerIds.add(l.OwnerId);
+        }
+        
+        map<Id, Boolean> leadOwnerMap = new map<Id, Boolean>();
+        for (user u : [SELECT
+                      Id,
+                      IsActive
+                      FROM User
+                       WHERE Id IN :leadOwnerIds]) {
+                           leadOwnerMap.put(u.Id, u.IsActive);
+                       }
+    
+		//create a map of companies to match with lead Linked Account
+    	map <Lead, Id> LeadAccountMap = new map<Lead, Id>();
+        for (lead l: leadsToConvert) {
+            LeadAccountMap.put(l,l.Account__c);
+        }
+        
+        //create a map of contact name with contact Id
+        Map <String, Id> ContactNameMap = new Map <String, Id>();
+
+        //populate maps with potential matching contacts
+        for (contact c : [SELECT
+                         Id,
+                         FirstName,
+                         LastName,
+                         Name,
+                         Account.Name,
+                         Email
+                         FROM Contact
+                         WHERE 
+                         FirstName != null AND
+                         LastName != null AND
+                         Email != null]) {
+                               ContactNameMap.put(c.Name+c.Email,c.Id);
+                           }
+
+        
+        //create a map of contacts to match with leads that have existing contacts
+        map <Lead, Id> LeadContactMap = new map<Lead, Id>();
+        
+        for (lead l : leadsToConvert) {
+            String LeadNameEmail = l.Name+l.Email;
+            boolean contactMatch = ContactNameMap.containsKey(LeadNameEmail);
+            if (contactMatch == TRUE) {
+                LeadContactMap.put(l, ContactNameMap.get(LeadNameEmail));
+            }
+            
+        }
+        
+        //iterate through leads and 
+        //set lead id
+        //set account
+        //set existing contact
+        //set converted status
+        //set create opportunity = false
+        //check if owner is inactive. If so, assign to queue.
+        
+        for (lead l : leadsToConvert) {
+            Database.LeadConvert lc = new Database.LeadConvert();
+			lc.setLeadId(l.Id);
+            lc.setAccountId(l.Account__c);
+            lc.setConvertedStatus(convertedStatus.MasterLabel);
+            lc.setDoNotCreateOpportunity(TRUE);
+            
+            if (LeadContactMap.containskey(l)) {
+                lc.setContactId(LeadContactMap.get(l));
+            }
+            
+            if (leadOwnerMap.get(l.OwnerId)==FALSE) {
+                lc.setOwnerId(apiUserId);
+            }
+            
+            
+            leadConverts.add(lc);
+            
+            
+        }
+		
+        //iterate through the list of lead convert objects and process them in batches of 100
+    
+        if (!leadConverts.isEmpty()){
+        integer listSize = leadConverts.size();
+        for(Integer i = 0; i <= listSize/100 ; i++){
+                list<Database.LeadConvert> tempList = new list<Database.LeadConvert>();
+                Integer startIndex = i*100;
+                Integer endIndex = ((startIndex+100) < listSize) ? startIndex+100: listSize;
+                
+                for(Integer j=startIndex;j<endIndex;j++){
+                    tempList.add(leadConverts[j]);
+                }
+				List<Database.LeadConvertResult> lcr = Database.convertLead(tempList,false);
+            }
+        }
+        
+        
+		
+    
+    
+
+    } 
+}
