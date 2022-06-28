@@ -1,0 +1,351 @@
+@isTest
+public class LeadConverterTest {
+
+    //set up campaign, account, contact, lead, users
+   
+    public static List<Profile> getStandardProfile() {
+           return [SELECT Id FROM Profile WHERE Name = 'Standard User' LIMIT 1];
+    }
+    
+    public static List<Profile> getAdminProfile() {
+           return [SELECT Id FROM Profile WHERE Name = 'System Administrator' LIMIT 1];
+    }
+    
+    public static List<User> getAdminUser() {
+        Id adminId = getAdminProfile()[0].Id;
+        return [SELECT Id FROM User WHERE ProfileId = :adminId and IsActive = true LIMIT 1];
+    }
+    
+    public static List<User> getApiUser() {
+        return [SELECT Id FROM User WHERE Username LIKE 'salesforce@fhiclinical.com%' LIMIT 1];
+    }
+    
+    public static User createUser1() {
+    
+        Profile standardProf = getStandardProfile()[0];
+        
+            return new User (
+            FirstName = 'Wally',  
+            LastName = 'Walmar',  
+            email = 'wwalmar@wilmar.com',  
+            Username = 'wwalmar@wilmar.com',  
+            EmailEncodingKey = 'ISO-8859-1',  
+            Alias = 'wwalma',  
+            TimeZoneSidKey = 'America/Los_Angeles',  
+            LocaleSidKey = 'en_US',  
+            LanguageLocaleKey = 'en_US',
+            UserRoleId = null,
+            IsActive = True,            
+            ProfileId = standardProf.Id
+            );
+    }
+        
+    public static User createUser2() {
+        
+        Profile standardProf = getStandardProfile()[0];
+        
+            return new User (
+            FirstName = 'Molly',  
+            LastName = 'Malmar',  
+            email = 'mmalmar@malmar.com',  
+            Username = 'mmalmar@malmar.com',  
+            EmailEncodingKey = 'ISO-8859-1',  
+            Alias = 'mmalma',  
+            TimeZoneSidKey = 'America/Los_Angeles',  
+            LocaleSidKey = 'en_US',  
+            LanguageLocaleKey = 'en_US',
+            UserRoleId = null,
+            IsActive = True,            
+            ProfileId = standardProf.Id
+            );
+    }
+        
+
+    public static Campaign createCampaign(){
+        return new Campaign (name = 'test Campaign');
+    }
+        
+    public static Account createAccount() {
+        return new Account (name = 'test Account');
+    }
+
+    public static Contact createContact() {
+        return new contact ();
+    }
+    
+    public static Map <Id, Lead> getConvertedLeads() {
+
+        list<lead> convertedLeads = [SELECT Id FROM Lead WHERE isConverted = True];
+        
+        map <Id, Lead> convertedLeadMap = new map <Id, Lead>();
+                for (lead l : convertedLeads) {
+                    convertedLeadMap.put(l.Id, l);
+                        }
+        return convertedLeadMap;
+    }
+    
+    //test that a lead is converted and matched with the lead linked account
+    
+    public static testMethod void testLeadNoMatch(){
+        
+        account acc = createAccount();
+        user u = createUser1();
+        campaign cam = createCampaign();
+        
+        insert cam;
+        
+        lead leadNoMatch = new lead (FirstName = 'Bary',
+                                    LastName = 'Beather',
+                                    Email = 'bbeather@mail.com',
+                                    Company = acc.name,
+                                    Status = 'New',
+                                    Account__c = acc.Id);
+        
+        insert leadNoMatch;
+        
+        campaignMember cm = new campaignMember(campaignId = cam.Id,
+                                              leadId = leadNoMatch.Id);
+        insert cm;
+        
+       	list<Id> campaignIds = new list<Id>();
+        campaignIds.add(cam.Id);
+        
+        test.startTest();
+        LeadConverterCampaign.convertCampaignLeads(campaignIds);
+        test.stopTest();
+        
+        //check the results
+        map <Id, Lead> convertedLeadMap = getConvertedLeads();
+        
+        system.assertEquals(true, convertedLeadMap.containskey(leadNoMatch.Id)); 
+        
+        //check that no duplicate account was created
+        integer mergedAccounts = [SELECT Count()
+                                 FROM Account
+                                 WHERE Name = 'test Account'];
+                system.assertEquals(1, mergedAccounts);
+        
+    }
+    
+
+    //test that a lead is matched with a contact, if a matching one exists
+
+    public static testMethod void testLeadWithMatch() {
+        
+        Account acc = createAccount();
+        campaign cam = createCampaign();
+        
+        insert cam;
+        insert acc;
+        
+        contact con = new contact(FirstName = 'Mary',
+                                 LastName = 'Weather',
+                                 Email = 'mweather@mail.com',
+                                 AccountId = acc.Id);
+    
+        insert con;
+        
+        lead leadWithMatch = new lead (FirstName = 'Mary',
+                                         LastName = 'Weather',
+                                         Email = 'mweather@mail.com',
+                                         Company = acc.Name,
+                                         Status = 'New',
+                                         Account__c = acc.Id);
+        
+        insert leadWithMatch;
+        
+        campaignMember cm = new campaignMember(campaignId = cam.Id,
+                                              leadId = leadWithMatch.Id);
+        insert cm;
+        
+       	list<Id> campaignIds = new list<Id>();
+        campaignIds.add(cam.Id);
+        
+        test.startTest();
+        LeadConverterCampaign.convertCampaignLeads(campaignIds);
+        test.stopTest();
+        
+        //check the results
+        map <Id, Lead> convertedLeadMap = getConvertedLeads();
+        
+        system.assertEquals(true, convertedLeadMap.containskey(leadWithMatch.Id)); 
+        
+        //check that lead with an existing contact did not create a duplicate contact
+        integer mergedContacts = [SELECT Count() 
+                                  From Contact
+                                 WHERE email = 'mweather@mail.com'];
+        system.assertEquals(1, mergedContacts);
+        
+        
+    }
+    
+        //test a lead with an inactive owner is assigned to the api user
+        
+        public static TestMethod void testLeadInactiveOwner(){
+           
+        user u1 = createUser1();
+        campaign cam = createCampaign();
+        user adminUser = getAdminUser()[0];       
+        account acc = createAccount();
+        
+        system.runAs(adminUser){
+            
+        insert u1;
+        insert cam;
+        insert acc;
+        
+        lead inactiveOwner = new lead (FirstName = 'Sherri',
+                                    LastName = 'Sheather',
+                                    Email = 'sseather@mail.com',
+                                    Company = acc.Name,
+                                    Status = 'New',
+                                    OwnerId = u1.Id,
+                                    Account__c = acc.Id);
+        
+        insert inactiveOwner;
+        
+            
+        List <User> users = [SELECT Id, IsActive FROM User WHERE Id = :u1.Id LIMIT 1];
+        User inActiveUser = users[0];
+        
+        system.assertEquals(true, inactiveUser.IsActive);
+            
+        inActiveUser.IsActive = false;
+        
+        Update inActiveUser;
+           
+        List <User> users1 = [SELECT Id, IsActive FROM User WHERE Id = :u1.Id LIMIT 1];
+        User inActiveUser1 = users[0];
+        system.assertEquals(false, inactiveUser1.IsActive);
+            
+            
+        campaignMember cm = new campaignMember(campaignId = cam.Id,
+                                              leadId = inactiveOwner.Id);
+        insert cm;
+                
+       	list<Id> campaignIds = new list<Id>();
+        campaignIds.add(cam.Id);
+        
+        test.startTest();
+        LeadConverterCampaign.convertCampaignLeads(campaignIds);
+        test.stopTest();
+        
+        //check the results
+        map <Id, Lead> convertedLeadMap = getConvertedLeads();
+        
+        //check the lead was converted
+        system.assertEquals(true, convertedLeadMap.containskey(inactiveOwner.Id));
+        
+        //check that the contact was re-assigned to the api user
+        contact reassignedLead = [SELECT Id, OwnerId FROM Contact WHERE email = :inactiveOwner.email];
+        user apiUserAccount = [SELECT Id FROM User WHERE Username LIKE 'salesforce@fhiclinical.com%'];
+            
+        system.assertEquals(apiUserAccount.Id, reassignedLead.OwnerId);
+        
+         }   
+        
+    }
+    
+    //test that a lead is converted if linked account is null
+    
+    public static testMethod void testNoAccount(){
+    
+    campaign cam = createCampaign();
+        insert cam;
+        
+    lead noAccount = new lead   (FirstName = 'Willy',
+                                    LastName = 'Weather',
+                                    Email = 'wweather@mail.com',
+                                    Company = 'The weather channel',
+                                    Status = 'New');
+        
+    insert noAccount;
+        
+        
+    campaignMember cm = new campaignMember(campaignId = cam.Id,
+                                              leadId = noAccount.Id);
+    insert cm;
+                
+       	list<Id> campaignIds = new list<Id>();
+        campaignIds.add(cam.Id);
+        
+        test.startTest();
+        LeadConverterCampaign.convertCampaignLeads(campaignIds);
+        test.stopTest();
+        
+        //check the lead was converted
+        map <Id, Lead> convertedLeadMap = getConvertedLeads();
+        
+        system.assertEquals(true, convertedLeadMap.containskey(noAccount.Id));
+        
+        //check that a lead with no existing account created a new account upon conversion
+        integer createdAccounts = [SELECT Count()
+                                  FROM Account
+                                  WHERE Name = 'The weather channel'];
+        
+        system.assertEquals(1, createdAccounts);
+
+        
+    }
+        
+    public static testMethod void bulkTest() {      
+        //bulk test
+        campaign cam = createCampaign();
+        insert cam;
+
+                list<lead> bulkLeads = new list<lead>();
+                for (integer i = 0; i<100; i++){
+                    lead l = new lead(
+                                    FirstName = 'Bary',
+                                    LastName = i+'Beather',
+                                    Company = i+'company',
+                                    Status = 'New');
+                    
+                    bulkLeads.add(l);
+                } 
+        
+            insert bulkLeads;        
+                
+                list<CampaignMember> cList = new list<campaignMember>();
+                for (lead l:bulkLeads){
+                    campaignMember c = new campaignMember(campaignId = cam.Id,
+                                              leadId = l.Id);
+                    cList.add(c);
+                }
+                
+                insert cList;
+                
+                
+                
+       	list<Id> campaignIds = new list<Id>();
+        campaignIds.add(cam.Id);
+        
+        list<Id> leadIds = new list<Id>();
+        for (lead l : bulkLeads){
+            leadIds.add(l.Id);
+        }
+        
+        test.startTest();
+        Integer batchSize = 100;
+		Database.executeBatch(new ConvertLeadsBatch(leadIds), batchSize);
+        test.stopTest();
+        
+            
+        for (lead l : [SELECT 
+                       Id,
+                       IsConverted
+                       FROM Lead 
+                       WHERE Id IN 
+                       (SELECT
+                        LeadId
+                        FROM CampaignMember
+                        WHERE CampaignId = :cam.Id
+                        AND LeadId != null) 
+                      ]){
+                          system.assertEquals(True,l.IsConverted);
+                      }
+                
+                
+            }
+    
+}
