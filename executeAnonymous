@@ -1,0 +1,22 @@
+//disable dlrs for account and contact
+//uninstall cloudingo, dap, blink apps
+//deactivate duplicate rules (account, lead, contact)
+
+Integer batchSize = 5;
+Id cam = '7017g000000GqG8AAK';
+List<lead> leads = [SELECT 
+                       Id,
+                       IsConverted
+                       FROM Lead 
+                       WHERE Id IN 
+                       (SELECT
+                        LeadId
+                        FROM CampaignMember
+                        WHERE CampaignId = :cam
+                        AND LeadId != null) 
+                      LIMIT 200];
+List<Id> leadIds = new List<Id>();
+for (lead l : leads){
+    leadIds.add(l.Id)
+;}
+Database.executeBatch(new ConvertLeadsBatch(leadIds), batchSize);
