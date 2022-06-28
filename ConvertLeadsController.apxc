@@ -1,0 +1,57 @@
+public class ConvertLeadsController {
+
+    ApexPages.StandardSetController setCon;
+    
+    //declare a variable to hold ids passed in from button
+    public String stringLeadIds{get;set;}
+    public account acct{get; set;}
+    
+
+    public ConvertLeadsController(ApexPages.StandardSetController controller)
+    {
+        setCon = controller;
+        String message = '' + ApexPages.CurrentPage().GetParameters().Get('message');
+        String pageHeaderReferer = ApexPages.currentPage().getHeaders().get('Referer');
+        
+         // Use the referrer parameter to only show the message when coming from Page 1
+        if(pageHeaderReferer != null && pageHeaderReferer.containsIgnoreCase('ConvertLeads') && message != 'null')
+        {
+               ApexPages.AddMessage(new ApexPages.Message(ApexPages.Severity.CONFIRM, message)); 
+        }
+        
+    }
+	
+    public pageReference ConvertLeadsAction()
+    {
+        // do something with the selected records
+        List<Lead> selectedLeads = setCon.getSelected();
+        List<Id> selectedLeadIds = new list<Id>();
+        Id accountId = selectedLeads[0].Account__c; 
+		
+        for ( Lead l : selectedLeads)
+        {
+                selectedLeadIds.add(l.Id);
+        }
+        
+        stringLeadIds = JSON.serialize(selectedLeadIds);
+        
+        LeadConverter.ConvertLeads(selectedLeadIds);
+        
+        this.acct = [SELECT Id FROM Account WHERE Id = :accountId];
+        
+        //redirect to account 
+        //PageReference acctPage = new ApexPages.StandardController(acct).view();
+        
+        return page.ConvertLeadsConfirm;
+    }
+    
+    public pageReference ConfirmAction() {
+        PageReference acctPage = new PageReference('/' + acct.Id);
+        acctPage.getParameters().put('message','The selected Leads were Converted');
+        acctPage.setRedirect(false);
+        return acctPage;
+    }
+    
+    
+    
+}
