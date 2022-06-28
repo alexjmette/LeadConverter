@@ -1,0 +1,49 @@
+<apex:page standardController="Lead" recordSetVar="leads" extensions="ConvertLeadsController" lightningStylesheets="true">
+    <apex:slds />
+    
+    <script>
+    </script>
+    
+    <apex:variable var="v" value="'{!selected}'"/>
+    <apex:variable var="v2" value="''"/>
+    
+    <apex:form >
+    <apex:pageBlock title="Convert Selected Leads">
+         <apex:pageMessages id="showMessage"/>
+       		<apex:pageBlockButtons location="bottom">
+                <apex:commandButton value="Cancel" action="{!cancel}"/>
+                <apex:commandButton rendered="{!v != v2}" value="Convert" action="{!ConvertLeadsAction}" status="status" rerender=""/>
+            </apex:pageBlockButtons>
+     <apex:outputPanel >   
+        <apex:actionStatus id="status" title="Please Wait">
+              <apex:facet name="start">
+                    <div class="slds-spinner_container">
+                         <div role="status" class="slds-spinner slds-spinner--medium slds-spinner--brand">
+                                <span class="slds-assistive-text">Loading</span>
+                                <div class="slds-spinner__dot-a"></div>
+                                <div class="slds-spinner__dot-b"></div>
+                          </div>
+                          <div class="slds-container--fluid slds-m-top--large">
+                                <div class="slds-grid slds-grid--align-center slds-text-heading--small" style="margin-top:30%;">
+                                      Converting Leads, please wait ...
+                                </div>
+                          </div>
+                     </div>
+               </apex:facet>
+        </apex:actionStatus>
+      </apex:outputPanel>  
+            <apex:pageBlockTable rendered="{!v != v2}" value="{!selected}" var="lead">
+                <apex:column value="{!lead.Firstname}"/>
+                <apex:column value="{!lead.Lastname}"/>
+				<apex:column value="{!lead.Account__c}"/>
+                </apex:pageBlockTable>
+        
+
+        <apex:outputPanel rendered="{!v == v2}">
+          <p>
+			Select at least one lead to continue
+        </p>
+        </apex:outputPanel>
+        </apex:pageBlock>
+        </apex:form>
+</apex:page>
