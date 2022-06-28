@@ -1,0 +1,30 @@
+public class ConvertLeadsBatch implements
+    Database.Batchable<sObject> {
+    
+    public list<Id> leadIds = new list<Id>();
+
+    public ConvertLeadsBatch(List<Id> leadIds) {
+        this.leadIds = leadIds;
+    }
+    
+    
+    public Database.QueryLocator start(Database.BatchableContext bc) {
+        return Database.getQueryLocator(
+            [SELECT ID FROM Lead Where Id IN :leadIds]);
+    }
+
+    public void execute(Database.BatchableContext bc, List<Lead> scope){
+        // process each batch of records
+        LeadConverter.ConvertLeads(leadIds);
+
+    }
+    public void finish(Database.BatchableContext bc){
+
+        AsyncApexJob job = [SELECT Id, Status, NumberOfErrors,
+            JobItemsProcessed,
+            TotalJobItems, CreatedBy.Email
+            FROM AsyncApexJob
+            WHERE Id = :bc.getJobId()];
+
+    }
+}
