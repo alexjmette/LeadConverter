@@ -1,0 +1,38 @@
+@isTest
+public class ConvertLeadsControllerTest {
+
+    public static testMethod void testMyController() {
+        PageReference pageRef = Page.ConvertLeadsConfirm;
+        Test.setCurrentPage(pageRef);
+      
+        list<lead> testLeads = new list<lead>();
+        
+        account a = new account(
+        name = 'Berryland');
+        insert a;
+        
+        for(integer i = 0; i<30; i++){
+            lead l = new lead(
+            lastName = 'last'+i,
+            company = 'company'+i,
+            Account__c = a.Id);
+                testLeads.add(l);
+        }
+        
+        insert testLeads;
+        
+	
+		//Test the ConvertLeadsController can accept a list of selected leads, get the related account, and call the convert leads action
+        ApexPages.StandardSetController setCon = new ApexPages.StandardSetController(testLeads);
+        setCon.setSelected(testLeads);
+        setCon.getSelected();
+        ConvertLeadsController extension = new ConvertLeadsController(setCon); 
+
+        extension.ConvertLeadsAction();  
+      
+
+        extension.ConfirmAction();  
+        
+        
+    }
+}
