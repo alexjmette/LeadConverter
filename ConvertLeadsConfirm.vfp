@@ -1,0 +1,21 @@
+<apex:page standardController="Lead" recordSetVar="leads" extensions="ConvertLeadsController" lightningStylesheets="true">
+    <apex:slds />
+    
+    <script>
+    </script>
+    
+        <apex:form >
+    <apex:pageBlock title="Confirmation">
+         <apex:pageMessages id="showMessage"/>
+       		<apex:pageBlockButtons location="bottom">
+                <apex:commandButton value="Return to Account" action="{!confirmAction}" rerender=""/>
+            </apex:pageBlockButtons>
+
+        <p>
+            The lead conversion process ran successfully.
+        </p>
+        
+        </apex:pageBlock>
+        </apex:form>
+    
+</apex:page>
